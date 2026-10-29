@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Inter, Lora } from "next/font/google";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
@@ -25,7 +26,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <Logo />
               </Link>
               <div className="flex items-center gap-x-8 gap-y-3 flex-wrap">
-                <TopicNav />
+                <Suspense fallback={null}>
+                  <TopicNav />
+                </Suspense>
                 <Link
                   href="/how-it-works"
                   className="font-sans text-sm text-ink-soft hover:text-ink transition-colors whitespace-nowrap"
