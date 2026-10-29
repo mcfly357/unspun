@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Internal only — never exposed through the API or UI. Used solely to
+// measure how politically diverse the coverage of a story is.
+model Source {
+  id      String @id @default(cuid())
+  name    String @unique
+  feedUrl String @unique
+  lean    String // "left" | "center-left" | "center" | "center-right" | "right"
+
+  articles Article[]
+}
+
+model Article {
+  id          String   @id @default(cuid())
+  sourceId    String
+  source      Source   @relation(fields: [sourceId], references: [id])
+  title       String
+  link        String   @unique
+  description String?
+  publishedAt DateTime
+  fetchedAt   DateTime @default(now())
+
+  clusterId String?
+  cluster   StoryCluster? @relation(fields: [clusterId], references: [id])
+}
+
+model StoryCluster {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  articles Article[]
+  story    SynthesizedStory?
+}
+
+model SynthesizedStory {
+  id        String   @id @default(cuid())
+  clusterId String   @unique
+  cluster   StoryCluster @relation(fields: [clusterId], references: [id])
+
+  headline        String
+  summary         String // neutral, fact-based synthesis
+  keyFacts        String // JSON-encoded string[]
+  disputedClaims  String // JSON-encoded string[] — claims that sources disagree on
+  unconfirmed     String // JSON-encoded string[] — claims reported by only one source
+  topic           String @default("other") // "politics" | "world" | "economy" | "science-tech" | "other"
+
+  sourceCount   Int
+  leanDiversity Int // number of distinct political "lean" buckets represented
+  generatedBy   String // "claude" | "fallback-extractive"
+
+  // Decorative, topic-matched stock photo — never a photo of the actual event.
+  // null unless UNSPLASH_ACCESS_KEY is set and a match was found; the UI
+  // falls back to the abstract TopicArt pattern when absent.
+  imageUrl            String?
+  imagePhotographer    String?
+  imagePhotographerUrl String?
+  imageSource          String  @default("none") // "unsplash" | "none"
+
+  createdAt DateTime @default(now())
+}
