@@ -24,8 +24,26 @@ const SYNTHESIS_TOOL: Anthropic.Tool = {
   description: "Submit the neutral, fact-checked synthesis of a news story.",
   input_schema: {
     type: "object",
+    // Field order matters here, not just for readability: the model reliably
+    // drops topic/imageQuery entirely (not just malformed — absent) when
+    // they're placed after the array fields, apparently derailed by whatever
+    // causes keyFacts/disputedClaims/unconfirmed to occasionally render as
+    // "<item>" strings instead of real arrays. Putting the short scalar
+    // fields first, before the model gets anywhere near the array fields,
+    // eliminates both problems in testing. Do not reorder without retesting.
     properties: {
       headline: { type: "string", description: "A neutral, non-sensational headline." },
+      topic: {
+        type: "string",
+        enum: TOPIC_VALUES,
+        description:
+          "The single best-fitting topic category. 'other' is a last resort — use a specific category whenever one reasonably applies, including 'entertainment' (celebrities, film, TV, music, arts) and 'sports' (games, athletes, leagues, betting). 'world' covers international news of any kind, not just diplomacy — foreign disasters, accidents, and crime included. Only use 'other' when none of the categories fit at all.",
+      },
+      imageQuery: {
+        type: "string",
+        description:
+          "A 2-4 word generic stock-photo search term capturing the general subject matter (e.g. 'courtroom gavel', 'stock market screens', 'hospital corridor', 'baseball stadium'). Must be generic enough that the photo could not be mistaken for actual footage of this event — never name the specific people, exact location, or anything unique to this story.",
+      },
       summary: {
         type: "string",
         description: "2-4 neutral paragraphs describing what happened, sticking to facts corroborated by multiple sources. No editorializing, no loaded language, no speculation about motives.",
@@ -45,19 +63,8 @@ const SYNTHESIS_TOOL: Anthropic.Tool = {
         items: { type: "string" },
         description: "Claims reported by only a single source that the others did not corroborate.",
       },
-      topic: {
-        type: "string",
-        enum: TOPIC_VALUES,
-        description:
-          "The single best-fitting topic category. 'other' is a last resort — use a specific category whenever one reasonably applies, including 'entertainment' (celebrities, film, TV, music, arts) and 'sports' (games, athletes, leagues, betting). 'world' covers international news of any kind, not just diplomacy — foreign disasters, accidents, and crime included. Only use 'other' when none of the categories fit at all.",
-      },
-      imageQuery: {
-        type: "string",
-        description:
-          "A 2-4 word generic stock-photo search term capturing the general subject matter (e.g. 'courtroom gavel', 'stock market screens', 'hospital corridor', 'baseball stadium'). Must be generic enough that the photo could not be mistaken for actual footage of this event — never name the specific people, exact location, or anything unique to this story.",
-      },
     },
-    required: ["headline", "summary", "keyFacts", "disputedClaims", "unconfirmed", "topic", "imageQuery"],
+    required: ["headline", "topic", "imageQuery", "summary", "keyFacts", "disputedClaims", "unconfirmed"],
   },
 };
 
@@ -100,14 +107,26 @@ function fallbackSynthesize(snippets: SourceSnippet[]): Synthesis {
   };
 }
 
-export async function synthesizeCluster(snippets: SourceSnippet[]): Promise<Synthesis> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return fallbackSynthesize(snippets);
-  }
+// The model sometimes renders a list field as a single string of
+// "<item>...</item>" tags (or plain newline-separated bullets) instead of
+// a real JSON array, despite the schema. Coerce rather than reject so a
+// harmless formatting quirk doesn't fall all the way back to no-LLM mode.
+function toStringArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
+  if (typeof v !== "string") return [];
+  const tagMatches = [...v.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((m) => m[1].trim());
+  if (tagMatches.length > 0) return tagMatches.filter(Boolean);
+  return v
+    .split("\n")
+    .map((line) => line.replace(/^[-*•]\s*/, "").trim())
+    .filter(Boolean);
+}
 
-  const client = new Anthropic({ apiKey });
+type ParsedSynthesis = Omit<Synthesis, "generatedBy">;
 
+/** One API call + parse attempt. Returns null on anything malformed so the
+ * caller can retry rather than silently accepting a degraded result. */
+async function attemptSynthesis(client: Anthropic, snippets: SourceSnippet[]): Promise<ParsedSynthesis | null> {
   const message = await client.messages.create({
     model: MODEL,
     max_tokens: 4096,
@@ -118,9 +137,7 @@ export async function synthesizeCluster(snippets: SourceSnippet[]): Promise<Synt
   });
 
   const toolUse = message.content.find((b) => b.type === "tool_use");
-  if (!toolUse || toolUse.type !== "tool_use") {
-    return fallbackSynthesize(snippets);
-  }
+  if (!toolUse || toolUse.type !== "tool_use") return null;
 
   const input = toolUse.input as Partial<{
     headline: string;
@@ -132,31 +149,19 @@ export async function synthesizeCluster(snippets: SourceSnippet[]): Promise<Synt
     imageQuery: unknown;
   }>;
 
-  // The model sometimes renders a list field as a single string of
-  // "<item>...</item>" tags (or plain newline-separated bullets) instead of
-  // a real JSON array, despite the schema. Coerce rather than reject so a
-  // harmless formatting quirk doesn't fall all the way back to no-LLM mode.
-  function toStringArray(v: unknown): string[] {
-    if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
-    if (typeof v !== "string") return [];
-    const tagMatches = [...v.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((m) => m[1].trim());
-    if (tagMatches.length > 0) return tagMatches.filter(Boolean);
-    return v
-      .split("\n")
-      .map((line) => line.replace(/^[-*•]\s*/, "").trim())
-      .filter(Boolean);
-  }
-
+  // A missing/invalid topic is the reliable tell for the field-dropout
+  // quirk this schema ordering is meant to prevent — treat it as a failed
+  // attempt (triggering a retry) rather than silently defaulting to "other".
   if (
     message.stop_reason === "max_tokens" ||
     typeof input.headline !== "string" ||
-    typeof input.summary !== "string"
+    typeof input.summary !== "string" ||
+    !TOPIC_VALUES.includes(input.topic as Topic)
   ) {
-    console.warn("  (malformed or truncated LLM output for a cluster — using fallback synthesis)");
-    return fallbackSynthesize(snippets);
+    return null;
   }
 
-  const topic: Topic = TOPIC_VALUES.includes(input.topic as Topic) ? (input.topic as Topic) : "other";
+  const topic = input.topic as Topic;
   const imageQuery = typeof input.imageQuery === "string" && input.imageQuery.trim() ? input.imageQuery.trim() : topicLabel(topic);
 
   return {
@@ -167,6 +172,24 @@ export async function synthesizeCluster(snippets: SourceSnippet[]): Promise<Synt
     unconfirmed: toStringArray(input.unconfirmed),
     topic,
     imageQuery,
-    generatedBy: "claude",
   };
+}
+
+export async function synthesizeCluster(snippets: SourceSnippet[]): Promise<Synthesis> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return fallbackSynthesize(snippets);
+  }
+
+  const client = new Anthropic({ apiKey });
+
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const result = await attemptSynthesis(client, snippets);
+    if (result) return { ...result, generatedBy: "claude" };
+    console.warn(`  (malformed LLM output, attempt ${attempt}/${MAX_ATTEMPTS})`);
+  }
+
+  console.warn("  (all synthesis attempts malformed — using fallback synthesis)");
+  return fallbackSynthesize(snippets);
 }
