@@ -5,6 +5,8 @@ const GRADIENTS: Record<Topic, string> = {
   world: "from-sky-200 via-sky-100 to-stone-100",
   economy: "from-amber-200 via-amber-100 to-stone-100",
   "science-tech": "from-violet-200 via-violet-100 to-stone-100",
+  entertainment: "from-fuchsia-200 via-fuchsia-100 to-stone-100",
+  sports: "from-emerald-200 via-emerald-100 to-stone-100",
   other: "from-neutral-200 via-neutral-100 to-stone-100",
 };
 

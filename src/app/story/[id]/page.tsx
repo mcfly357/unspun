@@ -36,6 +36,9 @@ export default async function StoryPage({ params }: { params: { id: string } }) 
   const disputedClaims: string[] = JSON.parse(story.disputedClaims);
   const unconfirmed: string[] = JSON.parse(story.unconfirmed);
   const sourceNames = Array.from(new Set(story.cluster.articles.map((a) => a.source.name))).sort();
+  const reporterNames = Array.from(
+    new Set(story.cluster.articles.map((a) => a.reporter).filter((r): r is string => !!r))
+  ).sort();
   const status = getStoryStatus({ disputedClaims, unconfirmed });
 
   return (
@@ -56,6 +59,12 @@ export default async function StoryPage({ params }: { params: { id: string } }) 
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-bold mt-3 leading-tight">{story.headline}</h1>
+
+        {reporterNames.length > 0 && (
+          <p className="font-sans text-sm text-ink-soft mt-2">
+            By {reporterNames.join(", ")}
+          </p>
+        )}
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Pill>{story.sourceCount} independent sources</Pill>

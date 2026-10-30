@@ -3,6 +3,8 @@ export const TOPICS = [
   { value: "world", label: "World" },
   { value: "economy", label: "Economy" },
   { value: "science-tech", label: "Science & Tech" },
+  { value: "entertainment", label: "Entertainment" },
+  { value: "sports", label: "Sports" },
   { value: "other", label: "Other" },
 ] as const;
 

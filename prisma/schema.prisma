@@ -26,6 +26,7 @@ model Article {
   title       String
   link        String   @unique
   description String?
+  reporter    String? // byline from the feed, sanitized to exclude publication/wire names
   publishedAt DateTime
   fetchedAt   DateTime @default(now())
 

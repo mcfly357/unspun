@@ -48,7 +48,8 @@ const SYNTHESIS_TOOL: Anthropic.Tool = {
       topic: {
         type: "string",
         enum: TOPIC_VALUES,
-        description: "The single best-fitting topic category for this story.",
+        description:
+          "The single best-fitting topic category. 'other' is a last resort — use a specific category whenever one reasonably applies, including 'entertainment' (celebrities, film, TV, music, arts) and 'sports' (games, athletes, leagues, betting). 'world' covers international news of any kind, not just diplomacy — foreign disasters, accidents, and crime included. Only use 'other' when none of the categories fit at all.",
       },
       imageQuery: {
         type: "string",

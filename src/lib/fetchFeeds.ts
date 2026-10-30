@@ -22,6 +22,26 @@ function parseWithDeadline(url: string, ms: number) {
   ]);
 }
 
+// Feed "creator"/"author" fields sometimes hold a publication or wire-service
+// name instead of a person (e.g. an NY Post item crediting "Fox News" for
+// syndicated content). Since reporter names are shown by default — unlike
+// outlet names, which stay hidden — a publication name leaking through here
+// would defeat the whole point. Filter those out rather than trust the feed.
+const NON_PERSON_BYLINES = new Set(
+  [...SOURCES.map((s) => s.name), "Reuters", "Associated Press", "AP", "AFP", "Bloomberg", "Staff", "Editorial Staff", "Wire Reports", "News Desk", "Newsroom", "Staff Report", "Staff Reports"].map((s) =>
+    s.toLowerCase()
+  )
+);
+
+function sanitizeReporter(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const name = raw.trim();
+  if (!name) return null;
+  if (NON_PERSON_BYLINES.has(name.toLowerCase())) return null;
+  if (/\b(staff|desk|newsroom|wire|editorial)\b/i.test(name)) return null;
+  return name.slice(0, 200);
+}
+
 export interface FetchSummary {
   source: string;
   ok: boolean;
@@ -59,6 +79,7 @@ export async function fetchAllFeeds(): Promise<FetchSummary[]> {
             title: item.title.trim(),
             link: item.link,
             description: (item.contentSnippet ?? item.summary ?? "").slice(0, 2000),
+            reporter: sanitizeReporter(item.creator ?? item.author),
             publishedAt,
           },
         });
