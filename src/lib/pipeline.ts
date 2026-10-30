@@ -2,6 +2,7 @@ import { fetchAllFeeds } from "./fetchFeeds";
 import { clusterNewArticles, getClustersReadyForSynthesis } from "./cluster";
 import { synthesizeCluster } from "./synthesize";
 import { LEAN_BUCKETS } from "./sources";
+import { topicLabel } from "./topics";
 import { findTopicImage } from "./unsplash";
 import { prisma } from "./db";
 
@@ -10,7 +11,13 @@ export interface PipelineResult {
   clustersAssigned: number;
   clustersCreated: number;
   storiesSynthesized: { headline: string; generatedBy: string; hasPhoto: boolean }[];
+  imagesBackfilled: number;
 }
+
+// Cap per run: the Unsplash free tier is 50 requests/hour shared with
+// new-story image lookups, and this pipeline can run every 30 minutes —
+// leave headroom rather than spend the whole budget on backfill.
+const MAX_IMAGE_BACKFILL_PER_RUN = 10;
 
 /** Fetch -> cluster -> synthesize -> image. Shared by the CLI script and the Vercel Cron route. */
 export async function runPipeline(): Promise<PipelineResult> {
@@ -54,6 +61,31 @@ export async function runPipeline(): Promise<PipelineResult> {
     });
   }
 
+  // Retry images for older stories that missed one last time (e.g. an
+  // Unsplash rate-limit hit). We don't persist the original per-story
+  // imageQuery, so this falls back to the topic label — less specific,
+  // but still far better than the permanent abstract-pattern fallback.
+  const missingImages = await prisma.synthesizedStory.findMany({
+    where: { imageSource: "none" },
+    take: MAX_IMAGE_BACKFILL_PER_RUN,
+  });
+
+  let imagesBackfilled = 0;
+  for (const story of missingImages) {
+    const image = await findTopicImage(topicLabel(story.topic));
+    if (!image) continue;
+    await prisma.synthesizedStory.update({
+      where: { id: story.id },
+      data: {
+        imageUrl: image.url,
+        imagePhotographer: image.photographerName,
+        imagePhotographerUrl: image.photographerUrl,
+        imageSource: "unsplash",
+      },
+    });
+    imagesBackfilled++;
+  }
+
   return {
     fetch: fetchResults.map((r) => ({
       source: r.source,
@@ -65,5 +97,6 @@ export async function runPipeline(): Promise<PipelineResult> {
     clustersAssigned: assigned,
     clustersCreated: created,
     storiesSynthesized,
+    imagesBackfilled,
   };
 }

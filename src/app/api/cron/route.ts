@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
       clustersCreated: result.clustersCreated,
       storiesSynthesized: result.storiesSynthesized.length,
       headlines: result.storiesSynthesized.map((s) => s.headline),
+      imagesBackfilled: result.imagesBackfilled,
     });
   } catch (err) {
     console.error(err);

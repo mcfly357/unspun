@@ -20,6 +20,10 @@ async function main() {
     console.log(`  synthesized: "${s.headline}" (${s.generatedBy}${s.hasPhoto ? ", +photo" : ""})`);
   }
 
+  if (result.imagesBackfilled > 0) {
+    console.log(`\n  backfilled images for ${result.imagesBackfilled} older story/stories`);
+  }
+
   console.log("\nDone.");
 }
 
