@@ -106,28 +106,39 @@ function StoryCard({ story }: { story: ReturnType<typeof parsed> }) {
 function WorldHighlights({ stories }: { stories: ReturnType<typeof parsed>[] }) {
   if (stories.length === 0) return null;
   return (
-    <div className="rounded-2xl border border-rule bg-paper-raised p-5 shadow-card">
-      <h2 className="font-sans text-sm font-bold text-ink mb-1">World highlights</h2>
-      <p className="font-sans text-xs text-ink-soft mb-3">
-        A few notable stories from outside the US.{" "}
-        <Link href="/?region=all" className="text-accent hover:underline">
-          See everything
+    <div className="rounded-2xl border border-rule bg-paper-raised p-5 shadow-card mb-8">
+      <div className="flex items-baseline justify-between mb-3">
+        <h2 className="font-sans text-sm font-bold text-ink">World highlights</h2>
+        <Link href="/?region=all" className="font-sans text-xs text-accent hover:underline shrink-0">
+          See everything &rarr;
         </Link>
-      </p>
-      <ul className="space-y-3">
+      </div>
+      <div className="flex gap-4 overflow-x-auto pb-1 -mx-1 px-1">
         {stories.map((story) => (
-          <li key={story.id}>
-            <Link href={`/story/${story.id}`} className="group block">
+          <Link
+            key={story.id}
+            href={`/story/${story.id}`}
+            className="group block w-56 shrink-0 rounded-xl border border-rule overflow-hidden hover:shadow-card-hover transition-shadow"
+          >
+            <StoryImage
+              topic={story.topic}
+              className="h-24"
+              imageUrl={story.imageUrl}
+              imagePhotographer={story.imagePhotographer}
+              imagePhotographerUrl={story.imagePhotographerUrl}
+              linked={false}
+            />
+            <div className="p-3">
               <span className="font-sans text-[10px] font-bold uppercase tracking-[0.1em] text-ink-soft">
                 {regionLabel(story.region)}
               </span>
-              <p className="text-sm font-semibold leading-snug group-hover:text-accent transition-colors">
+              <p className="text-sm font-semibold leading-snug mt-0.5 group-hover:text-accent transition-colors">
                 {story.headline}
               </p>
-            </Link>
-          </li>
+            </div>
+          </Link>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
@@ -192,6 +203,8 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
       </div>
 
       <div className="max-w-6xl mx-auto px-6 py-6">
+        {isDefaultRegionMode && <WorldHighlights stories={worldHighlights} />}
+
         {stories.length === 0 ? (
           <div className="text-ink-soft font-sans">
             <p className="mb-4">
@@ -216,8 +229,6 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
             </div>
 
             <aside className="flex flex-col gap-5 lg:sticky lg:top-24">
-              {isDefaultRegionMode && <WorldHighlights stories={worldHighlights} />}
-
               <div className="rounded-2xl border border-rule bg-paper-raised p-5 shadow-card">
                 <h2 className="text-lg font-bold mb-3">The evidence, not the echo</h2>
                 <ol className="space-y-2 font-sans text-sm text-ink-soft">
