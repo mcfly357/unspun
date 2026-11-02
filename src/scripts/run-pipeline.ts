@@ -20,6 +20,10 @@ async function main() {
     console.log(`  synthesized: "${s.headline}" (${s.generatedBy}${s.hasPhoto ? ", +photo" : ""})`);
   }
 
+  if (result.clustersDeferred > 0) {
+    console.log(`\n  deferred ${result.clustersDeferred} lower-priority cluster(s) to the next run (per-run cap)`);
+  }
+
   if (result.imagesBackfilled > 0) {
     console.log(`\n  backfilled images for ${result.imagesBackfilled} older story/stories`);
   }

@@ -13,12 +13,20 @@ export interface PipelineResult {
   clustersAssigned: number;
   clustersCreated: number;
   storiesSynthesized: { headline: string; generatedBy: string; hasPhoto: boolean }[];
+  clustersDeferred: number;
   imagesBackfilled: number;
 }
 
-// Cap per run: the Unsplash free tier is 50 requests/hour shared with
-// new-story image lookups, and this pipeline can run every 30 minutes —
-// leave headroom rather than spend the whole budget on backfill.
+// Caps per run: the Unsplash free tier is 50 requests/hour shared between
+// new-story image lookups and backfill. GitHub Actions' "every 30 minutes"
+// schedule doesn't fire that reliably in practice (frequent cron schedules
+// get deprioritized under platform load, sometimes landing hours apart),
+// so a single run's backlog can be large enough to blow through that
+// budget on its own. Cap how many new stories we synthesize per run and
+// prioritize the ones backed by more independent sources — a reasonable
+// proxy for "more significant" — rather than first-come-first-served.
+// Anything deferred isn't lost, just picked up on the next run.
+const MAX_STORIES_PER_RUN = 40;
 const MAX_IMAGE_BACKFILL_PER_RUN = 10;
 
 /** Fetch -> cluster -> synthesize -> image. Shared by the CLI script and the Vercel Cron route. */
@@ -27,9 +35,14 @@ export async function runPipeline(): Promise<PipelineResult> {
   const { assigned, created } = await clusterNewArticles();
   const ready = await getClustersReadyForSynthesis();
 
+  const prioritized = ready
+    .map((cluster) => ({ cluster, sourceCount: new Set(cluster.articles.map((a) => a.sourceId)).size }))
+    .sort((a, b) => b.sourceCount - a.sourceCount)
+    .slice(0, MAX_STORIES_PER_RUN);
+
   const storiesSynthesized: PipelineResult["storiesSynthesized"] = [];
 
-  for (const cluster of ready) {
+  for (const { cluster, sourceCount } of prioritized) {
     const snippets = cluster.articles.map((a) => ({ title: a.title, description: a.description }));
     const leans = new Set(cluster.articles.map((a) => a.source.lean));
     const leanDiversity = LEAN_BUCKETS.filter((l) => leans.has(l)).length;
@@ -49,7 +62,7 @@ export async function runPipeline(): Promise<PipelineResult> {
         topic: synthesis.topic,
         region,
         status: getStoryStatus({ disputedClaims: synthesis.disputedClaims, unconfirmed: synthesis.unconfirmed }).tone,
-        sourceCount: new Set(cluster.articles.map((a) => a.sourceId)).size,
+        sourceCount,
         leanDiversity,
         generatedBy: synthesis.generatedBy,
         imageUrl: image?.url,
@@ -102,6 +115,7 @@ export async function runPipeline(): Promise<PipelineResult> {
     clustersAssigned: assigned,
     clustersCreated: created,
     storiesSynthesized,
+    clustersDeferred: Math.max(0, ready.length - prioritized.length),
     imagesBackfilled,
   };
 }
