@@ -1,10 +1,13 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { topicLabel } from "@/lib/topics";
+import { regionLabel } from "@/lib/regions";
 import { getStoryStatus } from "@/lib/storyStatus";
 import { StatusBadge } from "@/components/StatusBadge";
 import { StoryImage } from "@/components/StoryImage";
 import { ReadingModeToggle } from "@/components/ReadingMode";
+import { FeedFilters } from "@/components/FeedFilters";
 
 export const dynamic = "force-dynamic";
 
@@ -100,15 +103,73 @@ function StoryCard({ story }: { story: ReturnType<typeof parsed> }) {
   );
 }
 
-export default async function FeedPage({ searchParams }: { searchParams: { topic?: string } }) {
-  const topic = searchParams.topic;
+function WorldHighlights({ stories }: { stories: ReturnType<typeof parsed>[] }) {
+  if (stories.length === 0) return null;
+  return (
+    <div className="rounded-2xl border border-rule bg-paper-raised p-5 shadow-card">
+      <h2 className="font-sans text-sm font-bold text-ink mb-1">World highlights</h2>
+      <p className="font-sans text-xs text-ink-soft mb-3">
+        A few notable stories from outside the US.{" "}
+        <Link href="/?region=all" className="text-accent hover:underline">
+          See everything
+        </Link>
+      </p>
+      <ul className="space-y-3">
+        {stories.map((story) => (
+          <li key={story.id}>
+            <Link href={`/story/${story.id}`} className="group block">
+              <span className="font-sans text-[10px] font-bold uppercase tracking-[0.1em] text-ink-soft">
+                {regionLabel(story.region)}
+              </span>
+              <p className="text-sm font-semibold leading-snug group-hover:text-accent transition-colors">
+                {story.headline}
+              </p>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
-  const rows = await prisma.synthesizedStory.findMany({
-    where: topic ? { topic } : undefined,
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
+interface FeedPageProps {
+  searchParams: { topic?: string; region?: string; status?: string };
+}
+
+export default async function FeedPage({ searchParams }: FeedPageProps) {
+  const { topic, region, status } = searchParams;
+
+  const baseWhere: Record<string, unknown> = {};
+  if (topic) baseWhere.topic = topic;
+  if (status) baseWhere.status = status;
+
+  let rows: StoryRow[];
+  let worldHighlightRows: StoryRow[] = [];
+  const isDefaultRegionMode = !region;
+
+  if (isDefaultRegionMode) {
+    [rows, worldHighlightRows] = await Promise.all([
+      prisma.synthesizedStory.findMany({
+        where: { ...baseWhere, region: "us" },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+      prisma.synthesizedStory.findMany({
+        where: { ...baseWhere, region: { not: "us" } },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      }),
+    ]);
+  } else {
+    rows = await prisma.synthesizedStory.findMany({
+      where: region === "all" ? baseWhere : { ...baseWhere, region },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+  }
+
   const stories = rows.map(parsed);
+  const worldHighlights = worldHighlightRows.map(parsed);
   const [featured, ...rest] = stories;
 
   return (
@@ -124,11 +185,17 @@ export default async function FeedPage({ searchParams }: { searchParams: { topic
         </div>
       </section>
 
-      <div className="max-w-6xl mx-auto px-6 py-10">
+      <div className="max-w-6xl mx-auto px-6 pt-6">
+        <Suspense fallback={null}>
+          <FeedFilters />
+        </Suspense>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-6 py-6">
         {stories.length === 0 ? (
           <div className="text-ink-soft font-sans">
             <p className="mb-4">
-              {topic ? `No stories in ${topicLabel(topic)} yet.` : "No synthesized stories yet."}
+              {topic || region || status ? "No stories match these filters yet." : "No synthesized stories yet."}
             </p>
             <p className="text-sm">Run the pipeline to fetch feeds, cluster coverage, and synthesize stories:</p>
             <pre className="bg-neutral-100 border border-rule rounded-lg p-3 mt-2 text-xs overflow-x-auto">
@@ -149,6 +216,8 @@ export default async function FeedPage({ searchParams }: { searchParams: { topic
             </div>
 
             <aside className="flex flex-col gap-5 lg:sticky lg:top-24">
+              {isDefaultRegionMode && <WorldHighlights stories={worldHighlights} />}
+
               <div className="rounded-2xl border border-rule bg-paper-raised p-5 shadow-card">
                 <h2 className="text-lg font-bold mb-3">The evidence, not the echo</h2>
                 <ol className="space-y-2 font-sans text-sm text-ink-soft">

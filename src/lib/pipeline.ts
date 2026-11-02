@@ -3,6 +3,8 @@ import { clusterNewArticles, getClustersReadyForSynthesis } from "./cluster";
 import { synthesizeCluster } from "./synthesize";
 import { LEAN_BUCKETS } from "./sources";
 import { topicLabel } from "./topics";
+import { majorityRegion } from "./regions";
+import { getStoryStatus } from "./storyStatus";
 import { findTopicImage } from "./unsplash";
 import { prisma } from "./db";
 
@@ -31,6 +33,7 @@ export async function runPipeline(): Promise<PipelineResult> {
     const snippets = cluster.articles.map((a) => ({ title: a.title, description: a.description }));
     const leans = new Set(cluster.articles.map((a) => a.source.lean));
     const leanDiversity = LEAN_BUCKETS.filter((l) => leans.has(l)).length;
+    const region = majorityRegion(cluster.articles.map((a) => a.source.region));
 
     const synthesis = await synthesizeCluster(snippets);
     const image = await findTopicImage(synthesis.imageQuery);
@@ -44,6 +47,8 @@ export async function runPipeline(): Promise<PipelineResult> {
         disputedClaims: JSON.stringify(synthesis.disputedClaims),
         unconfirmed: JSON.stringify(synthesis.unconfirmed),
         topic: synthesis.topic,
+        region,
+        status: getStoryStatus({ disputedClaims: synthesis.disputedClaims, unconfirmed: synthesis.unconfirmed }).tone,
         sourceCount: new Set(cluster.articles.map((a) => a.sourceId)).size,
         leanDiversity,
         generatedBy: synthesis.generatedBy,

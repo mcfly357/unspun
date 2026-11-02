@@ -15,6 +15,7 @@ model Source {
   name    String @unique
   feedUrl String @unique
   lean    String // "left" | "center-left" | "center" | "center-right" | "right"
+  region  String @default("international") // country/region of origin — see src/lib/regions.ts
 
   articles Article[]
 }
@@ -54,6 +55,8 @@ model SynthesizedStory {
   disputedClaims  String // JSON-encoded string[] — claims that sources disagree on
   unconfirmed     String // JSON-encoded string[] — claims reported by only one source
   topic           String @default("other") // "politics" | "world" | "economy" | "science-tech" | "other"
+  region          String @default("international") // majority region among contributing sources — see src/lib/regions.ts
+  status          String @default("supported") // "supported" | "disputed" | "unverified" — see src/lib/storyStatus.ts
 
   sourceCount   Int
   leanDiversity Int // number of distinct political "lean" buckets represented

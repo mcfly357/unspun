@@ -57,8 +57,8 @@ export async function fetchAllFeeds(): Promise<FetchSummary[]> {
   for (const def of SOURCES) {
     const source = await prisma.source.upsert({
       where: { name: def.name },
-      update: { feedUrl: def.feedUrl, lean: def.lean },
-      create: { name: def.name, feedUrl: def.feedUrl, lean: def.lean },
+      update: { feedUrl: def.feedUrl, lean: def.lean, region: def.region },
+      create: { name: def.name, feedUrl: def.feedUrl, lean: def.lean, region: def.region },
     });
 
     try {

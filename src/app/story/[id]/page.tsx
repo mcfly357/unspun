@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { topicLabel } from "@/lib/topics";
+import { regionLabel } from "@/lib/regions";
 import { getStoryStatus } from "@/lib/storyStatus";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SourceReveal } from "@/components/SourceReveal";
@@ -53,7 +54,7 @@ export default async function StoryPage({ params }: { params: { id: string } }) 
 
         <div className="flex items-center gap-3 mt-6">
           <span className="font-sans text-[11px] font-bold uppercase tracking-[0.12em] text-ink-soft">
-            {topicLabel(story.topic)}
+            {topicLabel(story.topic)} &middot; {regionLabel(story.region)}
           </span>
           <StatusBadge status={status} />
         </div>
