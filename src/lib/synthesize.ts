@@ -124,17 +124,44 @@ function toStringArray(v: unknown): string[] {
 
 type ParsedSynthesis = Omit<Synthesis, "generatedBy">;
 
+/** Thrown instead of letting the raw Anthropic.BadRequestError bubble up as
+ * an opaque stack trace — this condition is common enough (a $5 top-up runs
+ * out) and user-actionable enough to deserve a message that says so plainly,
+ * since it's what ends up in the GitHub Actions failure email. */
+export class InsufficientCreditsError extends Error {
+  constructor() {
+    super(
+      "Anthropic API credit balance is too low. Add funds at https://console.anthropic.com/settings/billing — " +
+        "RSS fetching and clustering from this run already saved successfully; only synthesis was skipped."
+    );
+    this.name = "InsufficientCreditsError";
+  }
+}
+
 /** One API call + parse attempt. Returns null on anything malformed so the
  * caller can retry rather than silently accepting a degraded result. */
 async function attemptSynthesis(client: Anthropic, snippets: SourceSnippet[]): Promise<ParsedSynthesis | null> {
-  const message = await client.messages.create({
-    model: MODEL,
-    max_tokens: 4096,
-    system: SYSTEM_PROMPT,
-    tools: [SYNTHESIS_TOOL],
-    tool_choice: { type: "tool", name: "submit_synthesis" },
-    messages: [{ role: "user", content: buildUserPrompt(snippets) }],
-  });
+  let message;
+  try {
+    message = await client.messages.create({
+      model: MODEL,
+      max_tokens: 4096,
+      system: SYSTEM_PROMPT,
+      tools: [SYNTHESIS_TOOL],
+      tool_choice: { type: "tool", name: "submit_synthesis" },
+      messages: [{ role: "user", content: buildUserPrompt(snippets) }],
+    });
+  } catch (err) {
+    if (
+      err instanceof Anthropic.APIError &&
+      err.status === 400 &&
+      typeof err.message === "string" &&
+      err.message.toLowerCase().includes("credit balance")
+    ) {
+      throw new InsufficientCreditsError();
+    }
+    throw err;
+  }
 
   const toolUse = message.content.find((b) => b.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") return null;

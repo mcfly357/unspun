@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { runPipeline } from "../lib/pipeline";
+import { InsufficientCreditsError } from "../lib/synthesize";
 import { prisma } from "../lib/db";
 
 async function main() {
@@ -33,7 +34,11 @@ async function main() {
 
 main()
   .catch((err) => {
-    console.error(err);
+    if (err instanceof InsufficientCreditsError) {
+      console.error(`\n${err.message}`);
+    } else {
+      console.error(err);
+    }
     process.exit(1);
   })
   .finally(() => prisma.$disconnect())
