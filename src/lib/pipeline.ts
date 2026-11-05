@@ -1,7 +1,8 @@
 import { fetchAllFeeds } from "./fetchFeeds";
 import { clusterNewArticles, getClustersReadyForSynthesis } from "./cluster";
 import { synthesizeCluster } from "./synthesize";
-import { LEAN_BUCKETS } from "./sources";
+import { LEAN_BUCKETS, type Lean } from "./sources";
+import { computeLeanBreakdown } from "./leanSkew";
 import { topicLabel } from "./topics";
 import { majorityRegion } from "./regions";
 import { getStoryStatus } from "./storyStatus";
@@ -48,6 +49,9 @@ export async function runPipeline(): Promise<PipelineResult> {
     const leanDiversity = LEAN_BUCKETS.filter((l) => leans.has(l)).length;
     const region = majorityRegion(cluster.articles.map((a) => a.source.region));
 
+    const sourceLeans = Array.from(new Map(cluster.articles.map((a) => [a.sourceId, a.source.lean as Lean])).values());
+    const leanBreakdown = computeLeanBreakdown(sourceLeans);
+
     const synthesis = await synthesizeCluster(snippets);
     const image = await findTopicImage(synthesis.imageQuery);
 
@@ -64,6 +68,8 @@ export async function runPipeline(): Promise<PipelineResult> {
         status: getStoryStatus({ disputedClaims: synthesis.disputedClaims, unconfirmed: synthesis.unconfirmed }).tone,
         sourceCount,
         leanDiversity,
+        skewedLean: leanBreakdown.skewedTo,
+        skewedPct: leanBreakdown.skewedTo ? leanBreakdown[leanBreakdown.skewedTo] : null,
         generatedBy: synthesis.generatedBy,
         imageUrl: image?.url,
         imagePhotographer: image?.photographerName,

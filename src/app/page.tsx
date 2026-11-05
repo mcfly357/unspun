@@ -103,6 +103,46 @@ function StoryCard({ story }: { story: ReturnType<typeof parsed> }) {
   );
 }
 
+function LopsidedCoverage({ stories }: { stories: ReturnType<typeof parsed>[] }) {
+  if (stories.length === 0) return null;
+  return (
+    <div className="rounded-2xl border border-rule bg-paper-raised p-5 shadow-card mb-8">
+      <div className="flex items-baseline justify-between mb-1">
+        <h2 className="font-sans text-sm font-bold text-ink">Lopsided coverage</h2>
+      </div>
+      <p className="font-sans text-xs text-ink-soft mb-3">
+        Stories where independent coverage leaned heavily to one side. Reveal sources on the story to see the breakdown.
+      </p>
+      <div className="flex gap-4 overflow-x-auto pb-1 -mx-1 px-1">
+        {stories.map((story) => (
+          <Link
+            key={story.id}
+            href={`/story/${story.id}`}
+            className="group block w-56 shrink-0 rounded-xl border border-rule overflow-hidden hover:shadow-card-hover transition-shadow"
+          >
+            <StoryImage
+              topic={story.topic}
+              className="h-24"
+              imageUrl={story.imageUrl}
+              imagePhotographer={story.imagePhotographer}
+              imagePhotographerUrl={story.imagePhotographerUrl}
+              linked={false}
+            />
+            <div className="p-3">
+              <span className="font-sans text-[10px] font-bold uppercase tracking-[0.1em] text-ink-soft">
+                &#9888; Skewed coverage
+              </span>
+              <p className="text-sm font-semibold leading-snug mt-0.5 group-hover:text-accent transition-colors">
+                {story.headline}
+              </p>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function WorldHighlights({ stories }: { stories: ReturnType<typeof parsed>[] }) {
   if (stories.length === 0) return null;
   return (
@@ -156,10 +196,11 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
 
   let rows: StoryRow[];
   let worldHighlightRows: StoryRow[] = [];
+  let skewedRows: StoryRow[] = [];
   const isDefaultRegionMode = !region;
 
   if (isDefaultRegionMode) {
-    [rows, worldHighlightRows] = await Promise.all([
+    [rows, worldHighlightRows, skewedRows] = await Promise.all([
       prisma.synthesizedStory.findMany({
         where: { ...baseWhere, region: "us" },
         orderBy: { createdAt: "desc" },
@@ -167,6 +208,11 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
       }),
       prisma.synthesizedStory.findMany({
         where: { ...baseWhere, region: { not: "us" } },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      }),
+      prisma.synthesizedStory.findMany({
+        where: { ...baseWhere, skewedLean: { not: null } },
         orderBy: { createdAt: "desc" },
         take: 5,
       }),
@@ -181,6 +227,7 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
 
   const stories = rows.map(parsed);
   const worldHighlights = worldHighlightRows.map(parsed);
+  const skewedStories = skewedRows.map(parsed);
   const [featured, ...rest] = stories;
 
   return (
@@ -204,6 +251,7 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
 
       <div className="max-w-6xl mx-auto px-6 py-6">
         {isDefaultRegionMode && <WorldHighlights stories={worldHighlights} />}
+        {isDefaultRegionMode && <LopsidedCoverage stories={skewedStories} />}
 
         {stories.length === 0 ? (
           <div className="text-ink-soft font-sans">

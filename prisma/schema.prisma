@@ -60,6 +60,8 @@ model SynthesizedStory {
 
   sourceCount   Int
   leanDiversity Int // number of distinct political "lean" buckets represented
+  skewedLean    String? // "left" | "center" | "right" — set when one group is 70%+ of sources; see src/lib/leanSkew.ts
+  skewedPct     Int? // that group's share of sources, 0-100
   generatedBy   String // "claude" | "fallback-extractive"
 
   // Decorative, topic-matched stock photo — never a photo of the actual event.
