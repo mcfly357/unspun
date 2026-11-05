@@ -7,6 +7,8 @@ import { getStoryStatus } from "@/lib/storyStatus";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SourceReveal } from "@/components/SourceReveal";
 import { StoryImage } from "@/components/StoryImage";
+import { computeLeanBreakdown } from "@/lib/leanSkew";
+import type { Lean } from "@/lib/sources";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,8 @@ export default async function StoryPage({ params }: { params: { id: string } }) 
   const disputedClaims: string[] = JSON.parse(story.disputedClaims);
   const unconfirmed: string[] = JSON.parse(story.unconfirmed);
   const sourceNames = Array.from(new Set(story.cluster.articles.map((a) => a.source.name))).sort();
+  const sourceLeans = Array.from(new Map(story.cluster.articles.map((a) => [a.source.id, a.source.lean as Lean])).values());
+  const leanBreakdown = computeLeanBreakdown(sourceLeans);
   const reporterNames = Array.from(
     new Set(story.cluster.articles.map((a) => a.reporter).filter((r): r is string => !!r))
   ).sort();
@@ -73,7 +77,7 @@ export default async function StoryPage({ params }: { params: { id: string } }) 
         </div>
 
         <div className="mt-4">
-          <SourceReveal sourceNames={sourceNames} />
+          <SourceReveal sourceNames={sourceNames} leanBreakdown={leanBreakdown} />
         </div>
 
         <StoryImage
