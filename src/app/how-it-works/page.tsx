@@ -61,6 +61,20 @@ export default function HowItWorksPage() {
 
       <div className="mt-6 rounded-xl border border-rule bg-paper-raised p-5">
         <h2 className="font-sans text-sm font-bold uppercase tracking-wide text-ink-soft mb-2">
+          Coverage skew, not outlet scores
+        </h2>
+        <p className="text-ink-soft leading-relaxed">
+          Most media-bias tools rate outlets &mdash; left, right, or center &mdash; and show you that
+          label up front, before you&rsquo;ve read a word. We don&rsquo;t score outlets at all. Once you
+          reveal a story&rsquo;s sources, we show the actual left/center/right mix of who covered{" "}
+          <em>this specific story</em>, and flag it when coverage leaned heavily to one side. It&rsquo;s a
+          read on this story&rsquo;s sourcing, not a permanent grade on a publication &mdash; and you still
+          see it only after the neutral version, never before.
+        </p>
+      </div>
+
+      <div className="mt-6 rounded-xl border border-rule bg-paper-raised p-5">
+        <h2 className="font-sans text-sm font-bold uppercase tracking-wide text-ink-soft mb-2">
           Limitations, honestly
         </h2>
         <ul className="text-ink-soft leading-relaxed list-disc list-inside space-y-1">
